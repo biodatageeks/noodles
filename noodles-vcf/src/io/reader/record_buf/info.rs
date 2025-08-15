@@ -12,6 +12,8 @@ pub enum ParseError {
     Empty,
     /// A field is invalid.
     InvalidField(field::ParseError),
+    /// An empty field is invalid.
+    InvalidEmpty,
     /// A key is duplicated.
     DuplicateKey(String),
 }
@@ -38,6 +40,7 @@ impl fmt::Display for ParseError {
 
                 Ok(())
             }
+            ParseError::InvalidEmpty => write!(f, "invalid empty"),
             ParseError::DuplicateKey(key) => write!(f, "duplicate key: {key}"),
         }
     }
@@ -47,6 +50,11 @@ pub(super) fn parse_info(header: &Header, s: &str, info: &mut Info) -> Result<()
     use indexmap::map::Entry;
 
     const DELIMITER: char = ';';
+    const MISSING: &str = ".";
+
+    if s == MISSING {
+        return Ok(());
+    }
 
     for raw_field in s.split(DELIMITER) {
         if raw_field.is_empty() {
@@ -72,16 +80,17 @@ pub(super) fn parse_info(header: &Header, s: &str, info: &mut Info) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::variant::record::Info as _;
 
     #[test]
-    fn test_parse_info() -> Result<(), ParseError> {
+    fn test_parse_info() {
         use crate::variant::{record::info::field::key, record_buf::info::field::Value};
 
         let header = Header::default();
         let mut info = Info::default();
 
         info.clear();
-        parse_info(&header, "NS=2", &mut info)?;
+        assert!(parse_info(&header, "NS=2", &mut info).is_ok());
         let expected = [(
             String::from(key::SAMPLES_WITH_DATA_COUNT),
             Some(Value::from(2)),
@@ -91,7 +100,7 @@ mod tests {
         assert_eq!(info, expected);
 
         info.clear();
-        parse_info(&header, "NS=2;AA=T", &mut info)?;
+        assert!(parse_info(&header, "NS=2;AA=T", &mut info).is_ok());
         let expected = [
             (
                 String::from(key::SAMPLES_WITH_DATA_COUNT),
@@ -103,15 +112,57 @@ mod tests {
         .collect();
         assert_eq!(info, expected);
 
-        assert_eq!(parse_info(&header, "", &mut info), Err(ParseError::Empty));
+        info.clear();
+        assert!(parse_info(&header, "NS=2;;AA=T", &mut info).is_ok());
+        assert_eq!(info, expected);
 
+        info.clear();
+        assert!(parse_info(&header, ";NS=2", &mut info).is_ok());
+        let expected = [
+            (
+                String::from(key::SAMPLES_WITH_DATA_COUNT),
+                Some(Value::from(2)),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(info, expected);
+
+        info.clear();
+        assert!(parse_info(&header, "NS=2;;;AA=T", &mut info).is_ok());
+        let expected = [
+            (
+                String::from(key::SAMPLES_WITH_DATA_COUNT),
+                Some(Value::from(2)),
+            ),
+            (String::from(key::ANCESTRAL_ALLELE), Some(Value::from("T"))),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(info, expected);
+
+        info.clear();
+        assert!(parse_info(&header, "NS=2;", &mut info).is_ok());
+        let expected = [
+            (
+                String::from(key::SAMPLES_WITH_DATA_COUNT),
+                Some(Value::from(2)),
+            ),
+        ]
+        .into_iter()
+        .collect();
+        assert_eq!(info, expected);
+
+        info.clear();
+        assert_eq!(parse_info(&header, ".", &mut info), Ok(()));
+        assert!(info.is_empty());
+
+        info.clear();
         assert_eq!(
             parse_info(&header, "NS=2;NS=2", &mut info),
             Err(ParseError::DuplicateKey(String::from(
                 key::SAMPLES_WITH_DATA_COUNT
             )))
         );
-
-        Ok(())
     }
 }

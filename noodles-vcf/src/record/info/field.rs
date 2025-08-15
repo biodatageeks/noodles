@@ -4,7 +4,7 @@ use std::io;
 
 use crate::{Header, header::record::value::map::info::Type, variant::record::info::field::Value};
 
-const DELIMITER: u8 = b';';
+pub(super) const DELIMITER: u8 = b';';
 const SEPARATOR: u8 = b'=';
 
 pub(super) fn parse_value<'a>(
@@ -37,31 +37,25 @@ pub(super) fn parse_value<'a>(
 }
 
 pub(super) fn next<'a>(src: &mut &'a str) -> Option<io::Result<(&'a str, Option<&'a str>)>> {
-    loop {
-        if src.is_empty() {
-            return None;
-        }
-
-        let (key, is_separated) = match read_key(src) {
-            Ok((k, is_eof)) => (k, is_eof),
-            Err(e) => return Some(Err(e)),
-        };
-
-        if key.is_empty() && !is_separated {
-            continue;
-        }
-
-        if !is_separated {
-            return Some(Ok((key, None)));
-        }
-
-        let value = match read_value(src) {
-            Ok(v) => v,
-            Err(e) => return Some(Err(e)),
-        };
-
-        return Some(Ok((key, Some(value))));
+    if src.is_empty() {
+        return None;
     }
+
+    let (key, is_separated) = match read_key(src) {
+        Ok((k, is_eof)) => (k, is_eof),
+        Err(e) => return Some(Err(e)),
+    };
+
+    if !is_separated {
+        return Some(Ok((key, None)));
+    }
+
+    let value = match read_value(src) {
+        Ok(v) => v,
+        Err(e) => return Some(Err(e)),
+    };
+
+    Some(Ok((key, Some(value))))
 }
 
 fn read_key<'a>(src: &mut &'a str) -> io::Result<(&'a str, bool)> {
@@ -164,6 +158,7 @@ mod tests {
         let mut src = "NS=2;;DP=3";
 
         assert_eq!(next(&mut src).transpose()?, Some(("NS", Some("2"))));
+        assert_eq!(next(&mut src).transpose()?, Some(("", None)));
         assert_eq!(next(&mut src).transpose()?, Some(("DP", Some("3"))));
         assert!(next(&mut src).is_none());
 
