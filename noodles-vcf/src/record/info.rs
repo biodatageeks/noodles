@@ -43,9 +43,28 @@ impl<'r> Info<'r> {
         let mut src = self.0;
 
         iter::from_fn(move || {
-            field::next(&mut src).map(|result| {
-                result.and_then(|(k, v)| field::parse_value(header, k, v).map(|value| (k, value)))
-            })
+            if src == "." {
+                src = ""; // To terminate the iterator.
+                return None;
+            }
+
+            loop {
+                if src.is_empty() {
+                    return None;
+                }
+
+                match field::next(&mut src) {
+                    Some(Ok(("", None))) => {
+                        // Skip empty fields and continue the loop.
+                        continue;
+                    }
+                    Some(Ok((k, v))) => {
+                        return Some(field::parse_value(header, k, v).map(|value| (k, value)));
+                    }
+                    Some(Err(e)) => return Some(Err(e)),
+                    None => return None,
+                }
+            }
         })
     }
 }
