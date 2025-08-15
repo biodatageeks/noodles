@@ -74,29 +74,19 @@ fn read_key<'a>(src: &mut &'a str) -> io::Result<(&'a str, bool)> {
         k
     };
 
-    let is_delimited = matches!(r#match, Some(DELIMITER));
+    let is_separated = matches!(r#match, Some(SEPARATOR));
 
-    if src.is_empty() && is_delimited {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unexpected field delimiter after key",
-        ))
-    } else if key.is_empty() {
-        let is_separated = matches!(r#match, Some(SEPARATOR));
+    if key.is_empty() {
         Ok((key, is_separated))
     } else {
-        let is_separated = matches!(r#match, Some(SEPARATOR));
         Ok((key, is_separated))
     }
 }
 
 fn read_value<'a>(src: &mut &'a str) -> io::Result<&'a str> {
-    let mut is_delimited = false;
-
     let value = if let Some(i) = memchr::memchr(DELIMITER, src.as_bytes()) {
         let (v, rest) = src.split_at(i);
         *src = &rest[1..];
-        is_delimited = true;
         v
     } else {
         let (v, rest) = src.split_at(src.len());
@@ -104,14 +94,7 @@ fn read_value<'a>(src: &mut &'a str) -> io::Result<&'a str> {
         v
     };
 
-    if src.is_empty() && is_delimited {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unexpected field delimiter after value",
-        ))
-    } else {
-        Ok(value)
-    }
+    Ok(value)
 }
 
 #[cfg(test)]
@@ -138,17 +121,17 @@ mod tests {
         assert_eq!(next(&mut src).transpose()?, Some(("DP", Some("."))));
         assert_eq!(next(&mut src).transpose()?, Some(("H3", None)));
 
-        // unexpected field delimiter after key
         let mut src = "H3;";
-        assert_invalid_data(next(&mut src));
+        assert_eq!(next(&mut src).transpose()?, Some(("H3", None)));
+        assert!(next(&mut src).is_none());
 
-        // missing key
         let mut src = ";";
-        assert_invalid_data(next(&mut src));
+        assert_eq!(next(&mut src).transpose()?, Some(("", None)));
+        assert!(next(&mut src).is_none());
 
-        // unexpected field delimiter after value
         let mut src = "NS=2;";
-        assert_invalid_data(next(&mut src));
+        assert_eq!(next(&mut src).transpose()?, Some(("NS", Some("2"))));
+        assert!(next(&mut src).is_none());
 
         Ok(())
     }
