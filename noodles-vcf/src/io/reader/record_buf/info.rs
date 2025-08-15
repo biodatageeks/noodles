@@ -48,11 +48,11 @@ pub(super) fn parse_info(header: &Header, s: &str, info: &mut Info) -> Result<()
 
     const DELIMITER: char = ';';
 
-    if s.is_empty() {
-        return Err(ParseError::Empty);
-    }
-
     for raw_field in s.split(DELIMITER) {
+        if raw_field.is_empty() {
+            continue;
+        }
+
         let (key, value) = parse_field(header, raw_field).map_err(ParseError::InvalidField)?;
 
         match info.as_mut().entry(key) {
