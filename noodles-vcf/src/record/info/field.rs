@@ -37,25 +37,31 @@ pub(super) fn parse_value<'a>(
 }
 
 pub(super) fn next<'a>(src: &mut &'a str) -> Option<io::Result<(&'a str, Option<&'a str>)>> {
-    if src.is_empty() {
-        return None;
+    loop {
+        if src.is_empty() {
+            return None;
+        }
+
+        let (key, is_separated) = match read_key(src) {
+            Ok((k, is_eof)) => (k, is_eof),
+            Err(e) => return Some(Err(e)),
+        };
+
+        if key.is_empty() && !is_separated {
+            continue;
+        }
+
+        if !is_separated {
+            return Some(Ok((key, None)));
+        }
+
+        let value = match read_value(src) {
+            Ok(v) => v,
+            Err(e) => return Some(Err(e)),
+        };
+
+        return Some(Ok((key, Some(value))));
     }
-
-    let (key, is_separated) = match read_key(src) {
-        Ok((k, is_eof)) => (k, is_eof),
-        Err(e) => return Some(Err(e)),
-    };
-
-    if !is_separated {
-        return Some(Ok((key, None)));
-    }
-
-    let value = match read_value(src) {
-        Ok(v) => v,
-        Err(e) => return Some(Err(e)),
-    };
-
-    Some(Ok((key, Some(value))))
 }
 
 fn read_key<'a>(src: &mut &'a str) -> io::Result<(&'a str, bool)> {
@@ -82,7 +88,8 @@ fn read_key<'a>(src: &mut &'a str) -> io::Result<(&'a str, bool)> {
             "unexpected field delimiter after key",
         ))
     } else if key.is_empty() {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "missing key"))
+        let is_separated = matches!(r#match, Some(SEPARATOR));
+        Ok((key, is_separated))
     } else {
         let is_separated = matches!(r#match, Some(SEPARATOR));
         Ok((key, is_separated))
@@ -117,6 +124,13 @@ fn read_value<'a>(src: &mut &'a str) -> io::Result<&'a str> {
 mod tests {
     use super::*;
 
+    fn assert_invalid_data(result: Option<io::Result<(&str, Option<&str>)>>) {
+        match result {
+            Some(Err(e)) => assert_eq!(e.kind(), io::ErrorKind::InvalidData),
+            _ => panic!("expected InvalidData error"),
+        }
+    }
+
     #[test]
     fn test_next() -> io::Result<()> {
         let mut src = "";
@@ -132,24 +146,26 @@ mod tests {
 
         // unexpected field delimiter after key
         let mut src = "H3;";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_invalid_data(next(&mut src));
 
         // missing key
         let mut src = ";";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_invalid_data(next(&mut src));
 
         // unexpected field delimiter after value
         let mut src = "NS=2;";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_invalid_data(next(&mut src));
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_next_with_empty_field() -> io::Result<()> {
+        let mut src = "NS=2;;DP=3";
+
+        assert_eq!(next(&mut src).transpose()?, Some(("NS", Some("2"))));
+        assert_eq!(next(&mut src).transpose()?, Some(("DP", Some("3"))));
+        assert!(next(&mut src).is_none());
 
         Ok(())
     }
