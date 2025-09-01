@@ -18,6 +18,7 @@ async = ["dep:futures", "dep:tokio"]
 bstr.workspace = true
 indexmap.workspace = true
 lexical-core.workspace = true
+memchr.workspace = true
 noodles-bgzf = { path = "../noodles-bgzf", version = "0.42.0" }
 noodles-core = { path = "../noodles-core", version = "0.18.0" }
 noodles-csi = { path = "../noodles-csi", version = "0.50.0" }
@@ -38,6 +39,10 @@ features = ["async"]
 
 [[bench]]
 name = "fast_vs_original"
+harness = false
+
+[[bench]]
+name = "ultimate_benchmark"
 harness = false
 
 
