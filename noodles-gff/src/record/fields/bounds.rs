@@ -3,8 +3,6 @@ use std::{
     ops::{Range, RangeFrom},
 };
 
-use bstr::ByteSlice;
-
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) struct Bounds {
     reference_sequence_name_end: usize,
@@ -119,7 +117,7 @@ fn read_required_field(src: &mut &[u8]) -> io::Result<usize> {
 fn read_field(src: &mut &[u8]) -> (usize, bool) {
     const DELIMITER: u8 = b'\t';
 
-    let (len, is_eol) = if let Some(i) = src.as_bstr().find_byte(DELIMITER) {
+    let (len, is_eol) = if let Some(i) = src.iter().position(|&b| b == DELIMITER) {
         (i + 1, false)
     } else {
         (src.len(), true)
