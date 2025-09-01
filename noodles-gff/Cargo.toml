@@ -27,6 +27,7 @@ futures = { workspace = true, optional = true, features = ["std"] }
 tokio = { workspace = true, optional = true, features = ["io-util"] }
 
 [dev-dependencies]
+flate2.workspace = true
 tokio = { workspace = true, features = ["fs", "macros", "rt-multi-thread"] }
 
 [lints]
@@ -34,6 +35,11 @@ workspace = true
 
 [package.metadata.docs.rs]
 features = ["async"]
+
+[[bench]]
+name = "fast_vs_original"
+harness = false
+
 
 [[example]]
 name = "gff_count_async"

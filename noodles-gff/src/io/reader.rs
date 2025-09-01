@@ -4,6 +4,7 @@ pub(crate) mod line;
 mod line_bufs;
 mod lines;
 mod record_bufs;
+pub mod fast;
 
 use std::io::{self, BufRead, Read, Seek};
 
@@ -11,7 +12,7 @@ use noodles_bgzf as bgzf;
 use noodles_core::Region;
 use noodles_csi::{self as csi, BinningIndex};
 
-pub use self::{line_bufs::LineBufs, lines::Lines, record_bufs::RecordBufs};
+pub use self::{line_bufs::LineBufs, lines::Lines, record_bufs::RecordBufs, fast::FastRecords};
 use crate::{Line, feature::RecordBuf};
 
 /// A GFF reader.
@@ -183,6 +184,29 @@ where
     /// ```
     pub fn record_bufs(&mut self) -> RecordBufs<'_, R> {
         RecordBufs::new(self.line_bufs())
+    }
+
+    /// Returns a fast iterator over records using simple string parsing.
+    ///
+    /// This is a performance-optimized parser that skips complex abstractions.
+    /// It consumes the reader and returns owned records.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use noodles_gff as gff;
+    ///
+    /// let data = b"##gff-version 3
+    /// sq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0
+    /// ";
+    /// let reader = gff::io::Reader::new(&data[..]);
+    /// let mut records = reader.fast_records();
+    ///
+    /// assert!(records.next().transpose()?.is_some());
+    /// # Ok::<_, std::io::Error>(())
+    /// ```
+    pub fn fast_records(self) -> FastRecords<R> {
+        FastRecords::new(self.inner)
     }
 }
 
