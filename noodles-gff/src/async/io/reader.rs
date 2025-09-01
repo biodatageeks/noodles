@@ -1,9 +1,11 @@
 mod line;
+pub mod fast;
 
 use futures::{Stream, TryStreamExt, stream};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
 use crate::{Line, LineBuf, directive_buf::key, feature::RecordBuf};
+use self::fast::{AsyncFastRecords, AsyncSIMDRecords};
 
 /// An async GFF reader.
 pub struct Reader<R> {
@@ -224,6 +226,63 @@ where
                 }
             }
         }))
+    }
+    
+    /// Returns a fast async stream over records using simple string parsing.
+    ///
+    /// This is a performance-optimized async parser that skips complex abstractions.
+    /// It consumes the reader and returns owned records.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.fast_records();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process record...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fast_records(self) -> AsyncFastRecords<R> {
+        AsyncFastRecords::new(self.inner)
+    }
+    
+    /// Returns a SIMD-optimized async stream over records.
+    ///
+    /// This uses vectorized operations for field splitting in an async context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.simd_records();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process record...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn simd_records(self) -> AsyncSIMDRecords<R> {
+        AsyncSIMDRecords::new(self.inner)
     }
 }
 
