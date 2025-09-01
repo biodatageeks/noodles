@@ -29,7 +29,10 @@ tokio = { workspace = true, optional = true, features = ["io-util"] }
 
 [dev-dependencies]
 flate2.workspace = true
-tokio = { workspace = true, features = ["fs", "macros", "rt-multi-thread"] }
+futures.workspace = true
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio = { workspace = true, features = ["fs", "macros", "rt-multi-thread", "io-util"] }
 
 [lints]
 workspace = true
@@ -43,6 +46,10 @@ harness = false
 
 [[bench]]
 name = "ultimate_benchmark"
+harness = false
+
+[[bench]]
+name = "async_benchmark"
 harness = false
 
 
