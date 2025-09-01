@@ -1,6 +1,6 @@
 [package]
 name = "noodles-gff"
-version = "0.59.0"
+version = "0.51.0"
 authors = ["Michael Macias <zaeleus@gmail.com>"]
 license.workspace = true
 edition.workspace = true
@@ -18,9 +18,10 @@ async = ["dep:futures", "dep:tokio"]
 bstr.workspace = true
 indexmap.workspace = true
 lexical-core.workspace = true
-noodles-bgzf = { path = "../noodles-bgzf", version = "0.49.0" }
-noodles-core = { path = "../noodles-core", version = "0.20.0" }
-noodles-csi = { path = "../noodles-csi", version = "0.58.0" }
+memchr.workspace = true
+noodles-bgzf = { path = "../noodles-bgzf", version = "0.42.0" }
+noodles-core = { path = "../noodles-core", version = "0.18.0" }
+noodles-csi = { path = "../noodles-csi", version = "0.50.0" }
 percent-encoding.workspace = true
 
 futures = { workspace = true, optional = true, features = ["std"] }
@@ -38,6 +39,10 @@ features = ["async"]
 
 [[bench]]
 name = "fast_vs_original"
+harness = false
+
+[[bench]]
+name = "ultimate_benchmark"
 harness = false
 
 

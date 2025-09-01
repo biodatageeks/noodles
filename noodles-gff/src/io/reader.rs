@@ -12,7 +12,7 @@ use noodles_bgzf as bgzf;
 use noodles_core::Region;
 use noodles_csi::{self as csi, BinningIndex};
 
-pub use self::{line_bufs::LineBufs, lines::Lines, record_bufs::RecordBufs, fast::FastRecords};
+pub use self::{line_bufs::LineBufs, lines::Lines, record_bufs::RecordBufs, fast::{FastRecords, SIMDRecords}};
 use crate::{Line, feature::RecordBuf};
 
 /// A GFF reader.
@@ -207,6 +207,13 @@ where
     /// ```
     pub fn fast_records(self) -> FastRecords<R> {
         FastRecords::new(self.inner)
+    }
+
+    /// Returns a SIMD-optimized iterator over records.
+    ///
+    /// This uses vectorized operations for field splitting.
+    pub fn simd_records(self) -> SIMDRecords<R> {
+        SIMDRecords::new(self.inner)
     }
 }
 
