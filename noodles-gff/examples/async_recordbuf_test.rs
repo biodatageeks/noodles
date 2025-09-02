@@ -8,11 +8,12 @@ async fn main() -> io::Result<()> {
     println!("Testing Async RecordBuf Support");
     println!("===============================");
 
-    // Sample GFF data
+    // Sample GFF data with various attribute types
     let data = b"##gff-version 3
 chr1\tHAVANA\tgene\t11869\t14409\t.\t+\t.\tID=ENSG00000223972.5;gene_id=ENSG00000223972.5;gene_type=transcribed_unprocessed_pseudogene;gene_name=DDX11L1;level=2
 chr1\tHAVANA\texon\t11869\t12227\t.\t+\t.\tID=exon:ENST00000456328.2:1;Parent=ENST00000456328.2;gene_id=ENSG00000223972.5;transcript_id=ENST00000456328.2;exon_number=1
 chr1\tHAVANA\texon\t12613\t12721\t42.5\t-\t0\tID=exon:ENST00000456328.2:2;Parent=ENST00000456328.2;gene_id=ENSG00000223972.5;transcript_id=ENST00000456328.2;exon_number=2
+chr1\tHAVANA\tCDS\t1000\t2000\t.\t+\t.\tID=cds1;Parent=transcript1;Alias=alt1,alt2,alt3;ontology_term=GO:0005515,GO:0003674
 ";
 
     println!("Testing fast_record_bufs()...");
