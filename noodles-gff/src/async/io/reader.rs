@@ -1,7 +1,7 @@
 mod line;
 pub mod fast;
 
-use futures::{Stream, TryStreamExt, stream};
+use futures::{Stream, TryStreamExt, StreamExt, stream};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
 use crate::{Line, LineBuf, directive_buf::key, feature::RecordBuf};
@@ -283,6 +283,72 @@ where
     /// ```
     pub fn simd_records(self) -> AsyncSIMDRecords<R> {
         AsyncSIMDRecords::new(self.inner)
+    }
+    
+    /// Returns a fast async stream over RecordBuf records.
+    ///
+    /// This converts the fast parser output to the standard RecordBuf format.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.fast_record_bufs();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process RecordBuf...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fast_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
+    where 
+        R: 'static
+    {
+        Box::pin(self.fast_records().map(|result| {
+            result.and_then(|record| record.to_record_buf())
+        }))
+    }
+    
+    /// Returns a SIMD async stream over RecordBuf records.
+    ///
+    /// This converts the SIMD parser output to the standard RecordBuf format.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.simd_record_bufs();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process RecordBuf...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn simd_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
+    where 
+        R: 'static
+    {
+        Box::pin(self.simd_records().map(|result| {
+            result.and_then(|record| record.to_record_buf())
+        }))
     }
 }
 

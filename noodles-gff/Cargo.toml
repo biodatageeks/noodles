@@ -56,3 +56,7 @@ harness = false
 [[example]]
 name = "gff_count_async"
 required-features = ["async"]
+
+[[example]]
+name = "async_recordbuf_test"
+required-features = ["async"]
