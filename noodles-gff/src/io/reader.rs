@@ -215,6 +215,7 @@ where
     pub fn simd_records(self) -> SIMDRecords<R> {
         SIMDRecords::new(self.inner)
     }
+
 }
 
 impl<R> Reader<bgzf::io::Reader<R>>
