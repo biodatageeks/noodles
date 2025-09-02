@@ -1,11 +1,11 @@
-mod line;
 pub mod fast;
+mod line;
 
-use futures::{Stream, TryStreamExt, StreamExt, stream};
+use futures::{Stream, StreamExt, TryStreamExt, stream};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
-use crate::{Line, LineBuf, directive_buf::key, feature::RecordBuf};
 use self::fast::{AsyncFastRecords, AsyncSIMDRecords};
+use crate::{Line, LineBuf, directive_buf::key, feature::RecordBuf};
 
 /// An async GFF reader.
 pub struct Reader<R> {
@@ -227,7 +227,7 @@ where
             }
         }))
     }
-    
+
     /// Returns a fast async stream over records using simple string parsing.
     ///
     /// This is a performance-optimized async parser that skips complex abstractions.
@@ -256,7 +256,7 @@ where
     pub fn fast_records(self) -> AsyncFastRecords<R> {
         AsyncFastRecords::new(self.inner)
     }
-    
+
     /// Returns a SIMD-optimized async stream over records.
     ///
     /// This uses vectorized operations for field splitting in an async context.
@@ -284,7 +284,7 @@ where
     pub fn simd_records(self) -> AsyncSIMDRecords<R> {
         AsyncSIMDRecords::new(self.inner)
     }
-    
+
     /// Returns a fast async stream over RecordBuf records.
     ///
     /// This converts the fast parser output to the standard RecordBuf format.
@@ -310,17 +310,20 @@ where
     /// # }
     /// ```
     pub fn fast_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
-    where 
-        R: 'static
+    where
+        R: 'static,
     {
         Box::pin(stream::try_unfold(
             fast::AsyncFastRecords::new(self.inner),
             |mut reader| async move {
-                reader.next_record_buf().await.map(|opt| opt.map(|record| (record, reader)))
-            }
+                reader
+                    .next_record_buf()
+                    .await
+                    .map(|opt| opt.map(|record| (record, reader)))
+            },
         ))
     }
-    
+
     /// Returns a SIMD async stream over RecordBuf records.
     ///
     /// This converts the SIMD parser output to the standard RecordBuf format.
@@ -346,14 +349,17 @@ where
     /// # }
     /// ```
     pub fn simd_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
-    where 
-        R: 'static
+    where
+        R: 'static,
     {
         Box::pin(stream::try_unfold(
             fast::AsyncSIMDRecords::new(self.inner),
             |mut reader| async move {
-                reader.next_record_buf().await.map(|opt| opt.map(|record| (record, reader)))
-            }
+                reader
+                    .next_record_buf()
+                    .await
+                    .map(|opt| opt.map(|record| (record, reader)))
+            },
         ))
     }
 }

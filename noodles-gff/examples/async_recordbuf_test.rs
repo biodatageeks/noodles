@@ -1,7 +1,7 @@
-use std::io;
 use futures::StreamExt;
-use tokio::io::BufReader;
 use noodles_gff as gff;
+use std::io;
+use tokio::io::BufReader;
 
 #[tokio::main]
 async fn main() -> io::Result<()> {
@@ -25,20 +25,21 @@ chr1\tHAVANA\tCDS\t1000\t2000\t.\t+\t.\tID=cds1;Parent=transcript1;Alias=alt1,al
         match result {
             Ok(record) => {
                 fast_count += 1;
-                println!("Fast Record {}: {} {}:{}-{} ({:?})", 
-                    fast_count, 
+                println!(
+                    "Fast Record {}: {} {}:{}-{} ({:?})",
+                    fast_count,
                     record.reference_sequence_name(),
                     record.ty(),
                     record.start(),
                     record.end(),
                     record.strand()
                 );
-                
+
                 // Test score parsing
                 if let Some(score) = record.score() {
                     println!("  Score: {}", score);
                 }
-                
+
                 println!("  Attributes: {:?}", record.attributes());
             }
             Err(e) => {
@@ -56,20 +57,21 @@ chr1\tHAVANA\tCDS\t1000\t2000\t.\t+\t.\tID=cds1;Parent=transcript1;Alias=alt1,al
         match result {
             Ok(record) => {
                 simd_count += 1;
-                println!("SIMD Record {}: {} {}:{}-{} ({:?})", 
-                    simd_count, 
+                println!(
+                    "SIMD Record {}: {} {}:{}-{} ({:?})",
+                    simd_count,
                     record.reference_sequence_name(),
                     record.ty(),
                     record.start(),
                     record.end(),
                     record.strand()
                 );
-                
+
                 // Test score parsing
                 if let Some(score) = record.score() {
                     println!("  Score: {}", score);
                 }
-                
+
                 println!("  Attributes: {:?}", record.attributes());
             }
             Err(e) => {
@@ -81,7 +83,7 @@ chr1\tHAVANA\tCDS\t1000\t2000\t.\t+\t.\tID=cds1;Parent=transcript1;Alias=alt1,al
     println!("\nSummary:");
     println!("Fast RecordBuf count: {}", fast_count);
     println!("SIMD RecordBuf count: {}", simd_count);
-    
+
     if fast_count == simd_count && fast_count > 0 {
         println!("✅ Both parsers produced the same number of records!");
     } else {

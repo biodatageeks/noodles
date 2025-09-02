@@ -75,12 +75,12 @@ async fn benchmark_raw_lines() -> io::Result<(usize, std::time::Duration)> {
 
     while let Some(result) = lines.next().await {
         let line = result.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-        
+
         // Skip comments and directives (same logic as parsers)
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
-        
+
         count += 1;
     }
 
@@ -92,7 +92,7 @@ async fn benchmark_raw_lines() -> io::Result<(usize, std::time::Duration)> {
 async fn main() -> io::Result<()> {
     println!("🚀 Async GFF Parser Ultimate Benchmark 🚀");
     println!("==========================================");
-    
+
     // Warmup runs
     println!("Warming up...");
     let _ = benchmark_raw_lines().await?;
@@ -110,7 +110,10 @@ async fn main() -> io::Result<()> {
     println!("Records: {}", raw_count);
     println!("Time: {:?}", raw_duration);
     println!("ns/record: {:.1}", raw_ns_per_record);
-    println!("records/sec: {:.0}\n", raw_count as f64 / raw_duration.as_secs_f64());
+    println!(
+        "records/sec: {:.0}\n",
+        raw_count as f64 / raw_duration.as_secs_f64()
+    );
 
     // Original async parser
     let (original_count, original_duration) = benchmark_async_original().await?;
@@ -120,8 +123,14 @@ async fn main() -> io::Result<()> {
     println!("Records: {}", original_count);
     println!("Time: {:?}", original_duration);
     println!("ns/record: {:.1}", original_ns_per_record);
-    println!("records/sec: {:.0}", original_count as f64 / original_duration.as_secs_f64());
-    println!("vs Raw: {:.2}x slower\n", original_ns_per_record / raw_ns_per_record);
+    println!(
+        "records/sec: {:.0}",
+        original_count as f64 / original_duration.as_secs_f64()
+    );
+    println!(
+        "vs Raw: {:.2}x slower\n",
+        original_ns_per_record / raw_ns_per_record
+    );
 
     // Fast async parser
     let (fast_count, fast_duration) = benchmark_async_fast().await?;
@@ -132,9 +141,15 @@ async fn main() -> io::Result<()> {
     println!("Records: {}", fast_count);
     println!("Time: {:?}", fast_duration);
     println!("ns/record: {:.1}", fast_ns_per_record);
-    println!("records/sec: {:.0}", fast_count as f64 / fast_duration.as_secs_f64());
+    println!(
+        "records/sec: {:.0}",
+        fast_count as f64 / fast_duration.as_secs_f64()
+    );
     println!("vs Original: {:.2}x faster", fast_speedup);
-    println!("vs Raw: {:.2}x slower\n", fast_ns_per_record / raw_ns_per_record);
+    println!(
+        "vs Raw: {:.2}x slower\n",
+        fast_ns_per_record / raw_ns_per_record
+    );
 
     // SIMD async parser
     let (simd_count, simd_duration) = benchmark_async_simd().await?;
@@ -145,30 +160,63 @@ async fn main() -> io::Result<()> {
     println!("Records: {}", simd_count);
     println!("Time: {:?}", simd_duration);
     println!("ns/record: {:.1}", simd_ns_per_record);
-    println!("records/sec: {:.0}", simd_count as f64 / simd_duration.as_secs_f64());
+    println!(
+        "records/sec: {:.0}",
+        simd_count as f64 / simd_duration.as_secs_f64()
+    );
     println!("vs Original: {:.2}x faster", simd_speedup);
-    println!("vs Raw: {:.2}x slower\n", simd_ns_per_record / raw_ns_per_record);
+    println!(
+        "vs Raw: {:.2}x slower\n",
+        simd_ns_per_record / raw_ns_per_record
+    );
 
     // Summary
     println!("🏆 ASYNC PERFORMANCE SUMMARY");
     println!("=============================");
-    
+
     let mut results = vec![
-        ("Raw Lines", raw_ns_per_record, raw_ns_per_record / raw_ns_per_record),
-        ("Original Async", original_ns_per_record, original_ns_per_record / raw_ns_per_record),
-        ("Fast Async", fast_ns_per_record, fast_ns_per_record / raw_ns_per_record),
-        ("SIMD Async", simd_ns_per_record, simd_ns_per_record / raw_ns_per_record),
+        (
+            "Raw Lines",
+            raw_ns_per_record,
+            raw_ns_per_record / raw_ns_per_record,
+        ),
+        (
+            "Original Async",
+            original_ns_per_record,
+            original_ns_per_record / raw_ns_per_record,
+        ),
+        (
+            "Fast Async",
+            fast_ns_per_record,
+            fast_ns_per_record / raw_ns_per_record,
+        ),
+        (
+            "SIMD Async",
+            simd_ns_per_record,
+            simd_ns_per_record / raw_ns_per_record,
+        ),
     ];
-    
+
     // Sort by performance (lowest ns/record first)
     results.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
-    
+
     println!("Ranking (fastest to slowest):");
     for (i, (name, ns_per_record, slowdown)) in results.iter().enumerate() {
         if name.contains("Raw") {
-            println!("{}. {} - {:.1} ns/record (baseline)", i + 1, name, ns_per_record);
+            println!(
+                "{}. {} - {:.1} ns/record (baseline)",
+                i + 1,
+                name,
+                ns_per_record
+            );
         } else {
-            println!("{}. {} - {:.1} ns/record ({:.2}x slower than raw)", i + 1, name, ns_per_record, slowdown);
+            println!(
+                "{}. {} - {:.1} ns/record ({:.2}x slower than raw)",
+                i + 1,
+                name,
+                ns_per_record,
+                slowdown
+            );
         }
     }
 
