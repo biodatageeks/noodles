@@ -9,7 +9,7 @@ use memchr::memchr_iter;
 use noodles_core::Position;
 
 use crate::feature::{RecordBuf, record::{Strand, Phase}};
-use crate::feature::record_buf::Attributes;
+use crate::feature::record_buf::{Attributes, attributes::field::{Tag, Value}};
 
 /// Async fast record that owns its data with lazy attribute parsing
 #[derive(Debug)]
@@ -124,9 +124,28 @@ impl AsyncFastRecord {
         let end = Position::try_from(self.end as usize)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid end position: {}", e)))?;
             
-        // For now, just use default attributes - full attribute parsing would require
-        // more complex handling of the Attributes type
-        let attributes = Attributes::default();
+        // Parse attributes into the proper RecordBuf format
+        let attributes = if self.attributes.is_empty() || self.attributes == "." {
+            Attributes::default()
+        } else {
+            // Convert our parsed HashMap to the proper Attributes format
+            let parsed_attrs = self.attributes();
+            parsed_attrs.iter()
+                .map(|(key, value)| {
+                    let tag = Tag::from(key.as_str());
+                    let val = if value.contains(',') {
+                        // Handle comma-separated values as arrays
+                        let parts: Vec<_> = value.split(',')
+                            .map(|s| s.trim().into())
+                            .collect();
+                        Value::Array(parts)
+                    } else {
+                        Value::String(value.clone().into())
+                    };
+                    (tag, val)
+                })
+                .collect()
+        };
         
         let mut builder = RecordBuf::builder()
             .set_reference_sequence_name(self.seqid.clone())
@@ -292,9 +311,28 @@ impl AsyncSIMDRecord {
         let end = Position::try_from(self.end as usize)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid end position: {}", e)))?;
             
-        // For now, just use default attributes - full attribute parsing would require
-        // more complex handling of the Attributes type
-        let attributes = Attributes::default();
+        // Parse attributes into the proper RecordBuf format
+        let attributes = if self.attributes.is_empty() || self.attributes == "." {
+            Attributes::default()
+        } else {
+            // Convert our parsed HashMap to the proper Attributes format
+            let parsed_attrs = self.attributes();
+            parsed_attrs.iter()
+                .map(|(key, value)| {
+                    let tag = Tag::from(key.as_str());
+                    let val = if value.contains(',') {
+                        // Handle comma-separated values as arrays
+                        let parts: Vec<_> = value.split(',')
+                            .map(|s| s.trim().into())
+                            .collect();
+                        Value::Array(parts)
+                    } else {
+                        Value::String(value.clone().into())
+                    };
+                    (tag, val)
+                })
+                .collect()
+        };
         
         let mut builder = RecordBuf::builder()
             .set_reference_sequence_name(self.seqid.clone())
