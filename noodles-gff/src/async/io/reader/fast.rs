@@ -10,6 +10,7 @@ use noodles_core::Position;
 
 use crate::feature::{RecordBuf, record::{Strand, Phase}};
 use crate::feature::record_buf::{Attributes, attributes::field::{Tag, Value}};
+use bstr::BString;
 
 /// Async fast record that owns its data with lazy attribute parsing
 #[derive(Debug)]
@@ -380,7 +381,7 @@ where
         }
     }
     
-    /// Read the next record asynchronously with robust line handling
+    /// Read the next record asynchronously
     pub async fn next_record(&mut self) -> io::Result<Option<AsyncFastRecord>> {
         loop {
             self.line_buf.clear();
@@ -395,47 +396,117 @@ where
                         continue;
                     }
                     
-                    // For gzipped files, we need to be more careful about incomplete lines
-                    // Check if this looks like a partial line by validating structure
+                    // Simple validation: check for minimum expected fields
                     let fields: Vec<&str> = line.split('\t').collect();
-                    if fields.len() < 9 {
-                        // If we don't have all 9 fields, this might be a split line
-                        // Try to reconstruct by reading more
-                        if fields.len() > 0 && !line.starts_with('\t') {
-                            // This looks like it might be the start of a split record
-                            let mut complete_line = line.to_string();
-                            
-                            // Keep reading until we have a complete line or EOF
-                            let mut attempts = 0;
-                            while attempts < 10 { // Limit attempts to avoid infinite loops
-                                let mut continuation = String::new();
-                                match self.reader.read_line(&mut continuation).await? {
-                                    0 => break, // EOF
-                                    _ => {
-                                        complete_line.push_str(continuation.trim_end());
-                                        let complete_fields: Vec<&str> = complete_line.split('\t').collect();
-                                        if complete_fields.len() >= 9 {
-                                            // We have a complete line, validate it
-                                            if complete_fields[3].parse::<u32>().is_ok() && 
-                                               complete_fields[4].parse::<u32>().is_ok() {
-                                                return Ok(Some(AsyncFastRecord::parse_line(&complete_line)?));
-                                            }
-                                            break; // Invalid even when complete
-                                        }
-                                        attempts += 1;
-                                    }
-                                }
-                            }
-                        }
-                        continue; // Skip this malformed line
+                    if fields.len() < 8 {
+                        continue; // Skip malformed lines silently (they're rare)
                     }
                     
                     // Quick validation of numeric fields (start and end positions)
                     if fields[3].parse::<u32>().is_err() || fields[4].parse::<u32>().is_err() {
-                        continue; // Skip invalid positions without warning spam
+                        continue; // Skip invalid positions
                     }
                     
                     return Ok(Some(AsyncFastRecord::parse_line(line)?));
+                }
+            }
+        }
+    }
+
+    /// Read the next record directly as RecordBuf (optimized path)
+    pub async fn next_record_buf(&mut self) -> io::Result<Option<RecordBuf>> {
+        loop {
+            self.line_buf.clear();
+            
+            match self.reader.read_line(&mut self.line_buf).await? {
+                0 => return Ok(None),
+                _ => {
+                    let line = self.line_buf.trim_end();
+                    
+                    // Skip comments and directives
+                    if line.is_empty() || line.starts_with('#') {
+                        continue;
+                    }
+                    
+                    // Parse directly to RecordBuf using optimized field splitting
+                    let mut fields = line.splitn(9, '\t');
+                    
+                    let seqid = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing seqid"))?;
+                    let source = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing source"))?;
+                    let ty = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing type"))?;
+                    let start_str = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing start"))?;
+                    let end_str = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing end"))?;
+                    let score_str = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing score"))?;
+                    let strand_str = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing strand"))?;
+                    let phase_str = fields.next().ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "missing phase"))?;
+                    let attributes_str = fields.next().unwrap_or("");
+
+                    // Parse numeric fields
+                    let start_pos: u32 = start_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid start position"))?;
+                    let end_pos: u32 = end_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid end position"))?;
+                    
+                    let start = Position::new(start_pos as usize)
+                        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid start position"))?;
+                    let end = Position::new(end_pos as usize)
+                        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid end position"))?;
+
+                    // Parse optional fields
+                    let score = if score_str == "." {
+                        None
+                    } else {
+                        Some(score_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid score"))?)
+                    };
+
+                    let strand = match strand_str {
+                        "+" => Strand::Forward,
+                        "-" => Strand::Reverse,
+                        "?" => Strand::Unknown,
+                        _ => Strand::None,
+                    };
+
+                    let phase = match phase_str {
+                        "0" => Some(Phase::Zero),
+                        "1" => Some(Phase::One),
+                        "2" => Some(Phase::Two),
+                        _ => None,
+                    };
+
+                    // Parse attributes directly
+                    let mut attributes = Attributes::default();
+                    if !attributes_str.is_empty() && attributes_str != "." {
+                        for pair in attributes_str.split(';') {
+                            if let Some((key, value)) = pair.split_once('=') {
+                                let tag = Tag::from(key);
+                                let attr_value = if value.contains(',') {
+                                    let parts: Vec<BString> = value.split(',').map(|s| BString::from(s.trim())).collect();
+                                    Value::Array(parts)
+                                } else {
+                                    Value::String(BString::from(value))
+                                };
+                                attributes.as_mut().insert(tag, attr_value);
+                            }
+                        }
+                    }
+
+                    // Build RecordBuf directly
+                    let mut builder = RecordBuf::builder()
+                        .set_reference_sequence_name(seqid)
+                        .set_source(source)
+                        .set_type(ty)
+                        .set_start(start)
+                        .set_end(end)
+                        .set_strand(strand)
+                        .set_attributes(attributes);
+
+                    if let Some(score) = score {
+                        builder = builder.set_score(score);
+                    }
+
+                    if let Some(phase) = phase {
+                        builder = builder.set_phase(phase);
+                    }
+
+                    return Ok(Some(builder.build()));
                 }
             }
         }
@@ -483,7 +554,7 @@ where
         }
     }
     
-    /// Read the next record asynchronously using SIMD optimization with robust line handling
+    /// Read the next record asynchronously using SIMD optimization
     pub async fn next_record(&mut self) -> io::Result<Option<AsyncSIMDRecord>> {
         loop {
             self.line_buf.clear();
@@ -498,47 +569,153 @@ where
                         continue;
                     }
                     
-                    // For gzipped files, we need to be more careful about incomplete lines
-                    // Check if this looks like a partial line by validating structure
+                    // Simple validation: check for minimum expected fields
                     let fields: Vec<&str> = line.split('\t').collect();
-                    if fields.len() < 9 {
-                        // If we don't have all 9 fields, this might be a split line
-                        // Try to reconstruct by reading more
-                        if fields.len() > 0 && !line.starts_with('\t') {
-                            // This looks like it might be the start of a split record
-                            let mut complete_line = line.to_string();
-                            
-                            // Keep reading until we have a complete line or EOF
-                            let mut attempts = 0;
-                            while attempts < 10 { // Limit attempts to avoid infinite loops
-                                let mut continuation = String::new();
-                                match self.reader.read_line(&mut continuation).await? {
-                                    0 => break, // EOF
-                                    _ => {
-                                        complete_line.push_str(continuation.trim_end());
-                                        let complete_fields: Vec<&str> = complete_line.split('\t').collect();
-                                        if complete_fields.len() >= 9 {
-                                            // We have a complete line, validate it
-                                            if complete_fields[3].parse::<u32>().is_ok() && 
-                                               complete_fields[4].parse::<u32>().is_ok() {
-                                                return Ok(Some(AsyncSIMDRecord::parse_line_simd(&complete_line)?));
-                                            }
-                                            break; // Invalid even when complete
-                                        }
-                                        attempts += 1;
-                                    }
-                                }
-                            }
-                        }
-                        continue; // Skip this malformed line
+                    if fields.len() < 8 {
+                        continue; // Skip malformed lines silently (they're rare)
                     }
                     
                     // Quick validation of numeric fields (start and end positions)
                     if fields[3].parse::<u32>().is_err() || fields[4].parse::<u32>().is_err() {
-                        continue; // Skip invalid positions without warning spam
+                        continue; // Skip invalid positions
                     }
                     
                     return Ok(Some(AsyncSIMDRecord::parse_line_simd(line)?));
+                }
+            }
+        }
+    }
+
+    /// Read the next record directly as RecordBuf using SIMD optimization
+    pub async fn next_record_buf(&mut self) -> io::Result<Option<RecordBuf>> {
+        loop {
+            self.line_buf.clear();
+            
+            match self.reader.read_line(&mut self.line_buf).await? {
+                0 => return Ok(None),
+                _ => {
+                    let line = self.line_buf.trim_end();
+                    
+                    // Skip comments and directives
+                    if line.is_empty() || line.starts_with('#') {
+                        continue;
+                    }
+                    
+                    // Use SIMD to find all tab positions at once
+                    let line_bytes = line.as_bytes();
+                    let mut field_starts = Vec::with_capacity(9);
+                    field_starts.push(0);
+                    
+                    for tab_pos in memchr_iter(b'\t', line_bytes) {
+                        field_starts.push(tab_pos + 1);
+                        if field_starts.len() >= 9 {
+                            break;
+                        }
+                    }
+                    
+                    if field_starts.len() < 8 {
+                        continue; // Skip malformed lines
+                    }
+                    
+                    // Extract fields using SIMD-found positions
+                    let seqid = &line[field_starts[0]..get_field_end(line_bytes, field_starts[0], field_starts.get(1))];
+                    let source = &line[field_starts[1]..get_field_end(line_bytes, field_starts[1], field_starts.get(2))];
+                    let ty = &line[field_starts[2]..get_field_end(line_bytes, field_starts[2], field_starts.get(3))];
+                    let start_str = &line[field_starts[3]..get_field_end(line_bytes, field_starts[3], field_starts.get(4))];
+                    let end_str = &line[field_starts[4]..get_field_end(line_bytes, field_starts[4], field_starts.get(5))];
+                    let score_str = &line[field_starts[5]..get_field_end(line_bytes, field_starts[5], field_starts.get(6))];
+                    let strand_str = &line[field_starts[6]..get_field_end(line_bytes, field_starts[6], field_starts.get(7))];
+                    let phase_str = &line[field_starts[7]..get_field_end(line_bytes, field_starts[7], field_starts.get(8))];
+                    let attributes_str = if let Some(&attr_start) = field_starts.get(8) {
+                        &line[attr_start..]
+                    } else {
+                        ""
+                    };
+
+                    // Parse numeric fields
+                    let start_pos: u32 = start_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid start position"))?;
+                    let end_pos: u32 = end_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid end position"))?;
+                    
+                    let start = Position::new(start_pos as usize)
+                        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid start position"))?;
+                    let end = Position::new(end_pos as usize)
+                        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid end position"))?;
+
+                    // Parse optional fields
+                    let score = if score_str == "." {
+                        None
+                    } else {
+                        Some(score_str.parse().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid score"))?)
+                    };
+
+                    let strand = match strand_str {
+                        "+" => Strand::Forward,
+                        "-" => Strand::Reverse,
+                        "?" => Strand::Unknown,
+                        _ => Strand::None,
+                    };
+
+                    let phase = match phase_str {
+                        "0" => Some(Phase::Zero),
+                        "1" => Some(Phase::One),
+                        "2" => Some(Phase::Two),
+                        _ => None,
+                    };
+
+                    // Parse attributes using SIMD for semicolon finding
+                    let mut attributes = Attributes::default();
+                    if !attributes_str.is_empty() && attributes_str != "." {
+                        let attr_bytes = attributes_str.as_bytes();
+                        let mut start = 0;
+                        
+                        for semi_pos in memchr_iter(b';', attr_bytes) {
+                            if let Some((key, value)) = attributes_str[start..semi_pos].split_once('=') {
+                                let tag = Tag::from(key);
+                                let attr_value = if value.contains(',') {
+                                    let parts: Vec<BString> = value.split(',').map(|s| BString::from(s.trim())).collect();
+                                    Value::Array(parts)
+                                } else {
+                                    Value::String(BString::from(value))
+                                };
+                                attributes.as_mut().insert(tag, attr_value);
+                            }
+                            start = semi_pos + 1;
+                        }
+                        
+                        // Handle the last field (no trailing semicolon)
+                        if start < attributes_str.len() {
+                            if let Some((key, value)) = attributes_str[start..].split_once('=') {
+                                let tag = Tag::from(key);
+                                let attr_value = if value.contains(',') {
+                                    let parts: Vec<BString> = value.split(',').map(|s| BString::from(s.trim())).collect();
+                                    Value::Array(parts)
+                                } else {
+                                    Value::String(BString::from(value))
+                                };
+                                attributes.as_mut().insert(tag, attr_value);
+                            }
+                        }
+                    }
+
+                    // Build RecordBuf directly
+                    let mut builder = RecordBuf::builder()
+                        .set_reference_sequence_name(seqid)
+                        .set_source(source)
+                        .set_type(ty)
+                        .set_start(start)
+                        .set_end(end)
+                        .set_strand(strand)
+                        .set_attributes(attributes);
+
+                    if let Some(score) = score {
+                        builder = builder.set_score(score);
+                    }
+
+                    if let Some(phase) = phase {
+                        builder = builder.set_phase(phase);
+                    }
+
+                    return Ok(Some(builder.build()));
                 }
             }
         }

@@ -313,9 +313,12 @@ where
     where 
         R: 'static
     {
-        Box::pin(self.fast_records().map(|result| {
-            result.and_then(|record| record.to_record_buf())
-        }))
+        Box::pin(stream::try_unfold(
+            fast::AsyncFastRecords::new(self.inner),
+            |mut reader| async move {
+                reader.next_record_buf().await.map(|opt| opt.map(|record| (record, reader)))
+            }
+        ))
     }
     
     /// Returns a SIMD async stream over RecordBuf records.
@@ -346,9 +349,12 @@ where
     where 
         R: 'static
     {
-        Box::pin(self.simd_records().map(|result| {
-            result.and_then(|record| record.to_record_buf())
-        }))
+        Box::pin(stream::try_unfold(
+            fast::AsyncSIMDRecords::new(self.inner),
+            |mut reader| async move {
+                reader.next_record_buf().await.map(|opt| opt.map(|record| (record, reader)))
+            }
+        ))
     }
 }
 
