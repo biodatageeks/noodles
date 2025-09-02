@@ -40,7 +40,7 @@ fn benchmark_fast() -> io::Result<(usize, std::time::Duration)> {
 
 fn main() -> io::Result<()> {
     println!("Benchmarking GFF parsers...");
-    
+
     // Warmup
     let _ = benchmark_original()?;
     let _ = benchmark_fast()?;
@@ -71,12 +71,14 @@ fn main() -> io::Result<()> {
     let speedup = original_ns_per_record / fast_ns_per_record;
     println!("\n=== COMPARISON ===");
     println!("Speedup: {:.2}x", speedup);
-    
+
     if fast_ns_per_record < original_ns_per_record {
-        let improvement = ((original_ns_per_record - fast_ns_per_record) / original_ns_per_record) * 100.0;
+        let improvement =
+            ((original_ns_per_record - fast_ns_per_record) / original_ns_per_record) * 100.0;
         println!("Performance improvement: {:.1}%", improvement);
     } else {
-        let regression = ((fast_ns_per_record - original_ns_per_record) / original_ns_per_record) * 100.0;
+        let regression =
+            ((fast_ns_per_record - original_ns_per_record) / original_ns_per_record) * 100.0;
         println!("Performance regression: {:.1}%", regression);
     }
 

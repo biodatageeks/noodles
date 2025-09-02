@@ -1,10 +1,10 @@
 //! GFF reader and iterators.
 
+pub mod fast;
 pub(crate) mod line;
 mod line_bufs;
 mod lines;
 mod record_bufs;
-pub mod fast;
 
 use std::io::{self, BufRead, Read, Seek};
 
@@ -12,7 +12,12 @@ use noodles_bgzf as bgzf;
 use noodles_core::Region;
 use noodles_csi::{self as csi, BinningIndex};
 
-pub use self::{line_bufs::LineBufs, lines::Lines, record_bufs::RecordBufs, fast::{FastRecords, SIMDRecords}};
+pub use self::{
+    fast::{FastRecords, SIMDRecords},
+    line_bufs::LineBufs,
+    lines::Lines,
+    record_bufs::RecordBufs,
+};
 use crate::{Line, feature::RecordBuf};
 
 /// A GFF reader.
@@ -215,7 +220,6 @@ where
     pub fn simd_records(self) -> SIMDRecords<R> {
         SIMDRecords::new(self.inner)
     }
-
 }
 
 impl<R> Reader<bgzf::io::Reader<R>>
