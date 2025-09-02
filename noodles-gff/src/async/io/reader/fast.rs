@@ -6,6 +6,10 @@ use std::pin::Pin;
 use tokio::io::{AsyncBufRead, AsyncBufReadExt};
 use futures::Stream;
 use memchr::memchr_iter;
+use noodles_core::Position;
+
+use crate::feature::{RecordBuf, record::{Strand, Phase}};
+use crate::feature::record_buf::Attributes;
 
 /// Async fast record that owns its data with lazy attribute parsing
 #[derive(Debug)]
@@ -94,6 +98,54 @@ impl AsyncFastRecord {
         self.parsed_attributes.get_or_init(|| {
             self.parse_attributes()
         })
+    }
+    
+    /// Convert this record to a RecordBuf
+    pub fn to_record_buf(&self) -> io::Result<RecordBuf> {
+        // Parse strand
+        let strand = match self.strand.as_str() {
+            "+" => Strand::Forward,
+            "-" => Strand::Reverse,
+            "?" => Strand::Unknown,
+            _ => Strand::None,
+        };
+        
+        // Parse phase
+        let phase = match self.phase.as_str() {
+            "0" => Some(Phase::Zero),
+            "1" => Some(Phase::One), 
+            "2" => Some(Phase::Two),
+            _ => None,
+        };
+        
+        // Convert positions (GFF is 1-based)
+        let start = Position::try_from(self.start as usize)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid start position: {}", e)))?;
+        let end = Position::try_from(self.end as usize)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid end position: {}", e)))?;
+            
+        // For now, just use default attributes - full attribute parsing would require
+        // more complex handling of the Attributes type
+        let attributes = Attributes::default();
+        
+        let mut builder = RecordBuf::builder()
+            .set_reference_sequence_name(self.seqid.clone())
+            .set_source(self.source.clone())
+            .set_type(self.ty.clone())
+            .set_start(start)
+            .set_end(end)
+            .set_strand(strand)
+            .set_attributes(attributes);
+            
+        if let Some(score) = self.score {
+            builder = builder.set_score(score);
+        }
+        
+        if let Some(phase) = phase {
+            builder = builder.set_phase(phase);
+        }
+        
+        Ok(builder.build())
     }
 }
 
@@ -214,6 +266,54 @@ impl AsyncSIMDRecord {
         self.parsed_attributes.get_or_init(|| {
             self.parse_attributes()
         })
+    }
+    
+    /// Convert this record to a RecordBuf
+    pub fn to_record_buf(&self) -> io::Result<RecordBuf> {
+        // Parse strand
+        let strand = match self.strand.as_str() {
+            "+" => Strand::Forward,
+            "-" => Strand::Reverse,
+            "?" => Strand::Unknown,
+            _ => Strand::None,
+        };
+        
+        // Parse phase
+        let phase = match self.phase.as_str() {
+            "0" => Some(Phase::Zero),
+            "1" => Some(Phase::One), 
+            "2" => Some(Phase::Two),
+            _ => None,
+        };
+        
+        // Convert positions (GFF is 1-based)
+        let start = Position::try_from(self.start as usize)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid start position: {}", e)))?;
+        let end = Position::try_from(self.end as usize)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, format!("invalid end position: {}", e)))?;
+            
+        // For now, just use default attributes - full attribute parsing would require
+        // more complex handling of the Attributes type
+        let attributes = Attributes::default();
+        
+        let mut builder = RecordBuf::builder()
+            .set_reference_sequence_name(self.seqid.clone())
+            .set_source(self.source.clone())
+            .set_type(self.ty.clone())
+            .set_start(start)
+            .set_end(end)
+            .set_strand(strand)
+            .set_attributes(attributes);
+            
+        if let Some(score) = self.score {
+            builder = builder.set_score(score);
+        }
+        
+        if let Some(phase) = phase {
+            builder = builder.set_phase(phase);
+        }
+        
+        Ok(builder.build())
     }
 }
 
