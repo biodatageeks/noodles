@@ -380,7 +380,7 @@ where
         }
     }
     
-    /// Read the next record asynchronously
+    /// Read the next record asynchronously with robust line handling
     pub async fn next_record(&mut self) -> io::Result<Option<AsyncFastRecord>> {
         loop {
             self.line_buf.clear();
@@ -395,17 +395,44 @@ where
                         continue;
                     }
                     
-                    // Skip lines that don't look like GFF records (need at least 8 fields)
+                    // For gzipped files, we need to be more careful about incomplete lines
+                    // Check if this looks like a partial line by validating structure
                     let fields: Vec<&str> = line.split('\t').collect();
-                    if fields.len() < 8 {
-                        eprintln!("Warning: Skipping malformed line (not enough fields): '{}'", line);
-                        continue;
+                    if fields.len() < 9 {
+                        // If we don't have all 9 fields, this might be a split line
+                        // Try to reconstruct by reading more
+                        if fields.len() > 0 && !line.starts_with('\t') {
+                            // This looks like it might be the start of a split record
+                            let mut complete_line = line.to_string();
+                            
+                            // Keep reading until we have a complete line or EOF
+                            let mut attempts = 0;
+                            while attempts < 10 { // Limit attempts to avoid infinite loops
+                                let mut continuation = String::new();
+                                match self.reader.read_line(&mut continuation).await? {
+                                    0 => break, // EOF
+                                    _ => {
+                                        complete_line.push_str(continuation.trim_end());
+                                        let complete_fields: Vec<&str> = complete_line.split('\t').collect();
+                                        if complete_fields.len() >= 9 {
+                                            // We have a complete line, validate it
+                                            if complete_fields[3].parse::<u32>().is_ok() && 
+                                               complete_fields[4].parse::<u32>().is_ok() {
+                                                return Ok(Some(AsyncFastRecord::parse_line(&complete_line)?));
+                                            }
+                                            break; // Invalid even when complete
+                                        }
+                                        attempts += 1;
+                                    }
+                                }
+                            }
+                        }
+                        continue; // Skip this malformed line
                     }
                     
                     // Quick validation of numeric fields (start and end positions)
                     if fields[3].parse::<u32>().is_err() || fields[4].parse::<u32>().is_err() {
-                        eprintln!("Warning: Skipping line with invalid positions: '{}'", line);
-                        continue;
+                        continue; // Skip invalid positions without warning spam
                     }
                     
                     return Ok(Some(AsyncFastRecord::parse_line(line)?));
@@ -456,7 +483,7 @@ where
         }
     }
     
-    /// Read the next record asynchronously using SIMD optimization
+    /// Read the next record asynchronously using SIMD optimization with robust line handling
     pub async fn next_record(&mut self) -> io::Result<Option<AsyncSIMDRecord>> {
         loop {
             self.line_buf.clear();
@@ -471,17 +498,44 @@ where
                         continue;
                     }
                     
-                    // Skip lines that don't look like GFF records (need at least 8 fields)
+                    // For gzipped files, we need to be more careful about incomplete lines
+                    // Check if this looks like a partial line by validating structure
                     let fields: Vec<&str> = line.split('\t').collect();
-                    if fields.len() < 8 {
-                        eprintln!("Warning: Skipping malformed line (not enough fields): '{}'", line);
-                        continue;
+                    if fields.len() < 9 {
+                        // If we don't have all 9 fields, this might be a split line
+                        // Try to reconstruct by reading more
+                        if fields.len() > 0 && !line.starts_with('\t') {
+                            // This looks like it might be the start of a split record
+                            let mut complete_line = line.to_string();
+                            
+                            // Keep reading until we have a complete line or EOF
+                            let mut attempts = 0;
+                            while attempts < 10 { // Limit attempts to avoid infinite loops
+                                let mut continuation = String::new();
+                                match self.reader.read_line(&mut continuation).await? {
+                                    0 => break, // EOF
+                                    _ => {
+                                        complete_line.push_str(continuation.trim_end());
+                                        let complete_fields: Vec<&str> = complete_line.split('\t').collect();
+                                        if complete_fields.len() >= 9 {
+                                            // We have a complete line, validate it
+                                            if complete_fields[3].parse::<u32>().is_ok() && 
+                                               complete_fields[4].parse::<u32>().is_ok() {
+                                                return Ok(Some(AsyncSIMDRecord::parse_line_simd(&complete_line)?));
+                                            }
+                                            break; // Invalid even when complete
+                                        }
+                                        attempts += 1;
+                                    }
+                                }
+                            }
+                        }
+                        continue; // Skip this malformed line
                     }
                     
                     // Quick validation of numeric fields (start and end positions)
                     if fields[3].parse::<u32>().is_err() || fields[4].parse::<u32>().is_err() {
-                        eprintln!("Warning: Skipping line with invalid positions: '{}'", line);
-                        continue;
+                        continue; // Skip invalid positions without warning spam
                     }
                     
                     return Ok(Some(AsyncSIMDRecord::parse_line_simd(line)?));

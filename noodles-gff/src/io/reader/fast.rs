@@ -2,6 +2,10 @@ use std::io::{self, BufRead};
 use std::collections::HashMap;
 use std::sync::OnceLock;
 use memchr::memchr_iter;
+use crate::feature::{RecordBuf, record_buf::{attributes::field::{Tag, Value}, Attributes}};
+use crate::feature::record::{Strand, Phase};
+use noodles_core::Position;
+use bstr::BString;
 
 /// A fast, zero-copy GFF record that defers parsing until needed
 #[derive(Debug)]
@@ -109,6 +113,61 @@ impl FastRecordOwned {
             attributes,
             parsed_attributes: OnceLock::new(),
         })
+    }
+
+    /// Convert to RecordBuf with proper attribute parsing
+    pub fn to_record_buf(&self) -> io::Result<RecordBuf> {
+        let start = Position::new(self.start as usize)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid start position"))?;
+        let end = Position::new(self.end as usize)
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "invalid end position"))?;
+
+        let strand = match self.strand.as_str() {
+            "+" => Strand::Forward,
+            "-" => Strand::Reverse,
+            "?" => Strand::Unknown,
+            _ => Strand::None,
+        };
+
+        let phase = match self.phase.as_str() {
+            "0" => Some(Phase::Zero),
+            "1" => Some(Phase::One),
+            "2" => Some(Phase::Two),
+            _ => None,
+        };
+
+        // Convert attributes HashMap to proper Attributes format
+        let mut attributes = Attributes::default();
+        for (key, value) in self.attributes() {
+            let tag = Tag::from(key.clone());
+            let attr_value = if value.contains(',') {
+                // Split comma-separated values into array
+                let values: Vec<BString> = value.split(',').map(|v| BString::from(v.trim())).collect();
+                Value::Array(values)
+            } else {
+                Value::String(BString::from(value.clone()))
+            };
+            attributes.as_mut().insert(tag, attr_value);
+        }
+
+        let mut builder = RecordBuf::builder()
+            .set_reference_sequence_name(self.seqid.as_str())
+            .set_source(self.source.as_str())
+            .set_type(self.ty.as_str())
+            .set_start(start)
+            .set_end(end)
+            .set_strand(strand)
+            .set_attributes(attributes);
+
+        if let Some(score) = self.score {
+            builder = builder.set_score(score);
+        }
+
+        if let Some(phase) = phase {
+            builder = builder.set_phase(phase);
+        }
+
+        Ok(builder.build())
     }
     
     /// Get an attribute value by key, parsing attributes lazily
