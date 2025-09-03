@@ -1,3 +1,4 @@
+use log;
 use memchr::memchr_iter;
 use std::collections::HashMap;
 use std::io::{self, BufRead};
@@ -745,7 +746,14 @@ impl<R: BufRead> Iterator for FastRecords<R> {
                         continue;
                     }
 
-                    return Some(FastRecordOwned::parse_line(line));
+                    // Try to parse - if it fails, skip the line (for parallel BGZF reading)
+                    match FastRecordOwned::parse_line(line) {
+                        Ok(record) => return Some(Ok(record)),
+                        Err(e) => {
+                            log::debug!("Skipping malformed GFF line: {}", e);
+                            continue;
+                        }
+                    }
                 }
                 Err(e) => return Some(Err(e)),
             }
