@@ -972,4 +972,50 @@ mod tests {
         assert!(simd_records[0].is_simd());
         assert!(simd_records[1].is_simd());
     }
+    
+    #[test]
+    fn test_coordinate_system_consistency() {
+        // Test that our fast/SIMD parsers preserve the same coordinate system as original noodles
+        let line = "chr1\tensembl\tgene\t1000\t2000\t.\t+\t.\tID=gene1";
+        
+        // Original noodles GFF parsing
+        let original_record = crate::record::Record::try_new(line.as_bytes()).unwrap();
+        let original_start = original_record.start().unwrap().get();
+        let original_end = original_record.end().unwrap().get();
+        
+        // Fast parsing
+        let fast_record = FastRecordOwned::parse_line(line).unwrap();
+        let fast_start = fast_record.start();
+        let fast_end = fast_record.end();
+        
+        // SIMD parsing  
+        let simd_record = SIMDRecord::parse_line_simd(line).unwrap();
+        let simd_start = simd_record.start();
+        let simd_end = simd_record.end();
+        
+        // All should return the same coordinate values
+        assert_eq!(original_start, fast_start as usize, "FastRecord start coordinate should match original noodles");
+        assert_eq!(original_end, fast_end as usize, "FastRecord end coordinate should match original noodles");
+        assert_eq!(original_start, simd_start as usize, "SIMDRecord start coordinate should match original noodles");
+        assert_eq!(original_end, simd_end as usize, "SIMDRecord end coordinate should match original noodles");
+        
+        // Verify the coordinate system: GFF uses 1-based coordinates
+        assert_eq!(fast_start, 1000, "Fast parser should preserve 1-based coordinates from GFF");
+        assert_eq!(fast_end, 2000, "Fast parser should preserve 1-based coordinates from GFF");
+        assert_eq!(simd_start, 1000, "SIMD parser should preserve 1-based coordinates from GFF");
+        assert_eq!(simd_end, 2000, "SIMD parser should preserve 1-based coordinates from GFF");
+        
+        // Test edge case: coordinate 1 (minimum valid 1-based coordinate)
+        let edge_line = "chr1\tensembl\tgene\t1\t1\t.\t+\t.\tID=edge";
+        let original_edge = crate::record::Record::try_new(edge_line.as_bytes()).unwrap();
+        let fast_edge = FastRecordOwned::parse_line(edge_line).unwrap();
+        let simd_edge = SIMDRecord::parse_line_simd(edge_line).unwrap();
+        
+        assert_eq!(original_edge.start().unwrap().get(), 1);
+        assert_eq!(fast_edge.start(), 1);
+        assert_eq!(simd_edge.start(), 1);
+        assert_eq!(original_edge.end().unwrap().get(), 1); 
+        assert_eq!(fast_edge.end(), 1);
+        assert_eq!(simd_edge.end(), 1);
+    }
 }
