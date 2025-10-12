@@ -157,12 +157,12 @@ impl sam::alignment::Record for Record<'_> {
                     let offset = usize::from(*reference_start);
                     let offset_alignment_start =
                         Position::new(alignment_start - offset + 1).unwrap();
-                    (sequence.clone(), offset_alignment_start)
+                    (std::sync::Arc::clone(sequence), offset_alignment_start)
                 }
                 Some(ReferenceSequence::External { sequence, .. }) => {
-                    (sequence.clone(), self.alignment_start.unwrap())
+                    (std::sync::Arc::clone(sequence), self.alignment_start.unwrap())
                 }
-                None => (fasta::record::Sequence::default(), Position::MIN),
+                None => (std::sync::Arc::new(fasta::record::Sequence::default()), Position::MIN),
             };
 
             Box::new(Sequence::new(

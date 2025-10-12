@@ -9,7 +9,7 @@ use super::Feature;
 use crate::container::compression_header::preservation_map::SubstitutionMatrix;
 
 pub(super) struct Sequence<'r, 'c: 'r> {
-    reference_sequence: Option<fasta::record::Sequence>,
+    reference_sequence: Option<std::sync::Arc<fasta::record::Sequence>>,
     substitution_matrix: SubstitutionMatrix,
     features: &'r [Feature<'c>],
     alignment_start: Position,
@@ -18,7 +18,7 @@ pub(super) struct Sequence<'r, 'c: 'r> {
 
 impl<'r, 'c: 'r> Sequence<'r, 'c> {
     pub(super) fn new(
-        reference_sequence: Option<fasta::record::Sequence>,
+        reference_sequence: Option<std::sync::Arc<fasta::record::Sequence>>,
         substitution_matrix: SubstitutionMatrix,
         features: &'r [Feature<'c>],
         alignment_start: Position,
@@ -59,7 +59,7 @@ impl sam::alignment::record::Sequence for Sequence<'_, '_> {
 
     fn iter(&self) -> Box<dyn Iterator<Item = u8> + '_> {
         Box::new(Iter::new(
-            self.reference_sequence.as_ref(),
+            self.reference_sequence.as_ref().map(|arc| arc.as_ref()),
             self.substitution_matrix.clone(),
             self.features,
             self.alignment_start,

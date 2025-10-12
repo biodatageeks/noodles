@@ -119,7 +119,7 @@ impl<'c> Slice<'c> {
         );
 
         let slice_reference_sequence = get_slice_reference_sequence(
-            &reference_sequence_repository.clone(),
+            &reference_sequence_repository,
             header,
             compression_header,
             &self.header,
@@ -313,10 +313,10 @@ fn calculate_template_length_chunk(
 pub(crate) enum ReferenceSequence {
     Embedded {
         reference_start: Position,
-        sequence: fasta::record::Sequence,
+        sequence: std::sync::Arc<fasta::record::Sequence>,
     },
     External {
-        sequence: fasta::record::Sequence,
+        sequence: std::sync::Arc<fasta::record::Sequence>,
     },
 }
 
@@ -360,7 +360,9 @@ fn get_slice_reference_sequence(
             validate_sequence(subsequence, expected_md5)?;
         }
 
-        Ok(Some(ReferenceSequence::External { sequence }))
+        Ok(Some(ReferenceSequence::External {
+            sequence: std::sync::Arc::new(sequence)
+        }))
     } else if let Some(block_content_id) = embedded_reference_bases_block_content_id {
         let src = external_data_srcs
             .iter()
@@ -370,7 +372,7 @@ fn get_slice_reference_sequence(
 
         Ok(Some(ReferenceSequence::Embedded {
             reference_start: context.alignment_start(),
-            sequence: fasta::record::Sequence::from(src.clone()),
+            sequence: std::sync::Arc::new(fasta::record::Sequence::from(src.clone())),
         }))
     } else {
         Ok(None)
@@ -397,7 +399,9 @@ fn get_record_reference_sequence(
         .transpose()?
         .expect("invalid reference sequence name");
 
-    Ok(Some(ReferenceSequence::External { sequence }))
+    Ok(Some(ReferenceSequence::External {
+        sequence: std::sync::Arc::new(sequence)
+    }))
 }
 
 fn validate_sequence(sequence: &[u8], expected_checksum: &[u8; 16]) -> io::Result<()> {
