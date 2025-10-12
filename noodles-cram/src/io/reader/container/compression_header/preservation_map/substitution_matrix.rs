@@ -41,11 +41,11 @@ mod tests {
         let actual = read_substitution_matrix(&mut &src[..])?;
 
         let expected = SubstitutionMatrix([
-            [Base::T, Base::G, Base::C, Base::N],
-            [Base::A, Base::G, Base::T, Base::N],
-            [Base::N, Base::A, Base::C, Base::T],
-            [Base::G, Base::N, Base::A, Base::C],
-            [Base::C, Base::G, Base::T, Base::A],
+            [Base::T, Base::G, Base::C, Base::N], // A
+            [Base::A, Base::G, Base::T, Base::N], // C
+            [Base::N, Base::A, Base::C, Base::T], // G
+            [Base::G, Base::N, Base::A, Base::C], // T
+            [Base::C, Base::G, Base::T, Base::A], // N
         ]);
 
         assert_eq!(actual, expected);

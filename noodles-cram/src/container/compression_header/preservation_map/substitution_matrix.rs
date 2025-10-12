@@ -15,7 +15,15 @@ pub struct SubstitutionMatrix(pub(crate) [[Base; 4]; 5]);
 
 impl SubstitutionMatrix {
     pub fn get(&self, reference_base: Base, code: u8) -> Base {
-        let i = reference_base as usize;
+        // Map IUPAC ambiguity codes to canonical bases for matrix lookup
+        // Only A, C, G, T, N have defined substitution matrices in CRAM spec
+        let i = match reference_base {
+            Base::A => 0,
+            Base::C => 1,
+            Base::G => 2,
+            Base::T => 3,
+            Base::N | Base::R | Base::Y | Base::K | Base::M | Base::S | Base::W | Base::B | Base::D | Base::H | Base::V => 4, // Treat ambiguous codes as N
+        };
         let j = usize::from(code & 0x03);
         self.0[i][j]
     }
