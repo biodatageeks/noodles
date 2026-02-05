@@ -114,10 +114,7 @@ fn build_container(
 
         blocks.extend(slice.external_data_blocks);
 
-        let last_landmark = landmarks.last().copied().unwrap_or(0);
-        let landmark = last_landmark + slice_size;
-        landmarks.push(landmark);
-
+        landmarks.push(container_size);
         container_size += slice_size;
     }
 
