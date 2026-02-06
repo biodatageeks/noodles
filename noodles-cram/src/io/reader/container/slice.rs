@@ -128,6 +128,10 @@ impl<'c> Slice<'c> {
 
         let substitution_matrix = compression_header.preservation_map().substitution_matrix();
 
+        let external_reference_sequence_is_required = compression_header
+            .preservation_map()
+            .external_reference_sequence_is_required();
+
         let mut records = vec![Record::default(); self.header.record_count()];
 
         for record in &mut records {
@@ -137,7 +141,12 @@ impl<'c> Slice<'c> {
 
             if !record.bam_flags.is_unmapped() && !record.cram_flags.sequence_is_missing() {
                 record.reference_sequence = if reference_sequence_context.is_many() {
-                    get_record_reference_sequence(&reference_sequence_repository, header, record)?
+                    get_record_reference_sequence(
+                        &reference_sequence_repository,
+                        header,
+                        record,
+                        external_reference_sequence_is_required,
+                    )?
                 } else {
                     slice_reference_sequence.clone()
                 };
@@ -381,8 +390,13 @@ fn get_record_reference_sequence(
     reference_sequence_repository: &fasta::Repository,
     header: &sam::Header,
     record: &Record<'_>,
+    external_reference_sequence_is_required: bool,
 ) -> io::Result<Option<ReferenceSequence>> {
     if record.bam_flags.is_unmapped() {
+        return Ok(None);
+    }
+
+    if !external_reference_sequence_is_required {
         return Ok(None);
     }
 
