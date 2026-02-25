@@ -4,7 +4,7 @@ use std::io;
 
 use crate::{Header, header::record::value::map::info::Type, variant::record::info::field::Value};
 
-const DELIMITER: u8 = b';';
+pub(super) const DELIMITER: u8 = b';';
 const SEPARATOR: u8 = b'=';
 
 pub(super) fn parse_value<'a>(
@@ -74,28 +74,19 @@ fn read_key<'a>(src: &mut &'a str) -> io::Result<(&'a str, bool)> {
         k
     };
 
-    let is_delimited = matches!(r#match, Some(DELIMITER));
+    let is_separated = matches!(r#match, Some(SEPARATOR));
 
-    if src.is_empty() && is_delimited {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unexpected field delimiter after key",
-        ))
-    } else if key.is_empty() {
-        Err(io::Error::new(io::ErrorKind::InvalidData, "missing key"))
+    if key.is_empty() {
+        Ok((key, is_separated))
     } else {
-        let is_separated = matches!(r#match, Some(SEPARATOR));
         Ok((key, is_separated))
     }
 }
 
 fn read_value<'a>(src: &mut &'a str) -> io::Result<&'a str> {
-    let mut is_delimited = false;
-
     let value = if let Some(i) = memchr::memchr(DELIMITER, src.as_bytes()) {
         let (v, rest) = src.split_at(i);
         *src = &rest[1..];
-        is_delimited = true;
         v
     } else {
         let (v, rest) = src.split_at(src.len());
@@ -103,19 +94,19 @@ fn read_value<'a>(src: &mut &'a str) -> io::Result<&'a str> {
         v
     };
 
-    if src.is_empty() && is_delimited {
-        Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            "unexpected field delimiter after value",
-        ))
-    } else {
-        Ok(value)
-    }
+    Ok(value)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_invalid_data(result: Option<io::Result<(&str, Option<&str>)>>) {
+        match result {
+            Some(Err(e)) => assert_eq!(e.kind(), io::ErrorKind::InvalidData),
+            _ => panic!("expected InvalidData error"),
+        }
+    }
 
     #[test]
     fn test_next() -> io::Result<()> {
@@ -130,26 +121,29 @@ mod tests {
         assert_eq!(next(&mut src).transpose()?, Some(("DP", Some("."))));
         assert_eq!(next(&mut src).transpose()?, Some(("H3", None)));
 
-        // unexpected field delimiter after key
         let mut src = "H3;";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_eq!(next(&mut src).transpose()?, Some(("H3", None)));
+        assert!(next(&mut src).is_none());
 
-        // missing key
         let mut src = ";";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_eq!(next(&mut src).transpose()?, Some(("", None)));
+        assert!(next(&mut src).is_none());
 
-        // unexpected field delimiter after value
         let mut src = "NS=2;";
-        assert!(matches!(
-            next(&mut src),
-            Some(Err(e)) if e.kind() == io::ErrorKind::InvalidData,
-        ));
+        assert_eq!(next(&mut src).transpose()?, Some(("NS", Some("2"))));
+        assert!(next(&mut src).is_none());
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_next_with_empty_field() -> io::Result<()> {
+        let mut src = "NS=2;;DP=3";
+
+        assert_eq!(next(&mut src).transpose()?, Some(("NS", Some("2"))));
+        assert_eq!(next(&mut src).transpose()?, Some(("", None)));
+        assert_eq!(next(&mut src).transpose()?, Some(("DP", Some("3"))));
+        assert!(next(&mut src).is_none());
 
         Ok(())
     }

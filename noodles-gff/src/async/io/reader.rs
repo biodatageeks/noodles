@@ -1,8 +1,10 @@
+pub mod fast;
 mod line;
 
-use futures::{Stream, TryStreamExt, stream};
+use futures::{Stream, StreamExt, TryStreamExt, stream};
 use tokio::io::{self, AsyncBufRead, AsyncBufReadExt};
 
+use self::fast::{AsyncFastRecords, AsyncSIMDRecords};
 use crate::{Line, LineBuf, directive_buf::key, feature::RecordBuf};
 
 /// An async GFF reader.
@@ -224,6 +226,141 @@ where
                 }
             }
         }))
+    }
+
+    /// Returns a fast async stream over records using simple string parsing.
+    ///
+    /// This is a performance-optimized async parser that skips complex abstractions.
+    /// It consumes the reader and returns owned records.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.fast_records();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process record...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fast_records(self) -> AsyncFastRecords<R> {
+        AsyncFastRecords::new(self.inner)
+    }
+
+    /// Returns a SIMD-optimized async stream over records.
+    ///
+    /// This uses vectorized operations for field splitting in an async context.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.simd_records();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process record...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn simd_records(self) -> AsyncSIMDRecords<R> {
+        AsyncSIMDRecords::new(self.inner)
+    }
+
+    /// Returns a fast async stream over RecordBuf records.
+    ///
+    /// This converts the fast parser output to the standard RecordBuf format.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.fast_record_bufs();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process RecordBuf...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn fast_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
+    where
+        R: 'static,
+    {
+        Box::pin(stream::try_unfold(
+            fast::AsyncFastRecords::new(self.inner),
+            |mut reader| async move {
+                reader
+                    .next_record_buf()
+                    .await
+                    .map(|opt| opt.map(|record| (record, reader)))
+            },
+        ))
+    }
+
+    /// Returns a SIMD async stream over RecordBuf records.
+    ///
+    /// This converts the SIMD parser output to the standard RecordBuf format.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[tokio::main]
+    /// # async fn main() -> tokio::io::Result<()> {
+    /// use futures::StreamExt;
+    /// use noodles_gff as gff;
+    /// use tokio::io::BufReader;
+    ///
+    /// let data = b"##gff-version 3\nsq0\tNOODLES\tgene\t8\t13\t.\t+\t.\tgene_id=ndls0;gene_name=gene0\n";
+    /// let reader = gff::r#async::io::Reader::new(BufReader::new(&data[..]));
+    /// let mut stream = reader.simd_record_bufs();
+    ///
+    /// while let Some(result) = stream.next().await {
+    ///     let record = result?;
+    ///     // Process RecordBuf...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn simd_record_bufs(self) -> impl Stream<Item = io::Result<RecordBuf>> + 'static
+    where
+        R: 'static,
+    {
+        Box::pin(stream::try_unfold(
+            fast::AsyncSIMDRecords::new(self.inner),
+            |mut reader| async move {
+                reader
+                    .next_record_buf()
+                    .await
+                    .map(|opt| opt.map(|record| (record, reader)))
+            },
+        ))
     }
 }
 

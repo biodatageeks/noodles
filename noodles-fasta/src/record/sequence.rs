@@ -40,6 +40,20 @@ impl Sequence {
         self.0.is_empty()
     }
 
+    /// Removes all bases from the sequence.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use noodles_fasta::record::Sequence;
+    /// let mut sequence = Sequence::from(b"ACGT".to_vec());
+    /// sequence.clear();
+    /// assert!(sequence.is_empty());
+    /// ```
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
     /// Returns a reference to a base at or slice of bases between the given index.
     ///
     /// # Examples

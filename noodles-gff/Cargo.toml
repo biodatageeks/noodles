@@ -18,6 +18,8 @@ async = ["dep:futures", "dep:tokio"]
 bstr.workspace = true
 indexmap.workspace = true
 lexical-core.workspace = true
+log.workspace = true
+memchr.workspace = true
 noodles-bgzf = { path = "../noodles-bgzf", version = "0.42.0" }
 noodles-core = { path = "../noodles-core", version = "0.18.0" }
 noodles-csi = { path = "../noodles-csi", version = "0.50.0" }
@@ -27,7 +29,11 @@ futures = { workspace = true, optional = true, features = ["std"] }
 tokio = { workspace = true, optional = true, features = ["io-util"] }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["fs", "macros", "rt-multi-thread"] }
+flate2.workspace = true
+futures.workspace = true
+async-compression = { version = "0.4", features = ["tokio", "gzip"] }
+tokio-util = { version = "0.7", features = ["codec"] }
+tokio = { workspace = true, features = ["fs", "macros", "rt-multi-thread", "io-util"] }
 
 [lints]
 workspace = true
@@ -35,6 +41,23 @@ workspace = true
 [package.metadata.docs.rs]
 features = ["async"]
 
+[[bench]]
+name = "fast_vs_original"
+harness = false
+
+[[bench]]
+name = "ultimate_benchmark"
+harness = false
+
+[[bench]]
+name = "async_benchmark"
+harness = false
+
+
 [[example]]
 name = "gff_count_async"
+required-features = ["async"]
+
+[[example]]
+name = "async_recordbuf_test"
 required-features = ["async"]

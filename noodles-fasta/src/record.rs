@@ -8,7 +8,7 @@ use bstr::BStr;
 pub use self::{definition::Definition, sequence::Sequence};
 
 /// A FASTA record.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct Record {
     definition: Definition,
     sequence: Sequence,
@@ -47,6 +47,10 @@ impl Record {
     /// ```
     pub fn definition(&self) -> &Definition {
         &self.definition
+    }
+
+    pub fn definition_mut(&mut self) -> &mut Definition {
+        &mut self.definition
     }
 
     /// Returns the record name.
@@ -99,5 +103,14 @@ impl Record {
     /// ```
     pub fn sequence(&self) -> &Sequence {
         &self.sequence
+    }
+
+    pub fn sequence_mut(&mut self) -> &mut Sequence {
+        &mut self.sequence
+    }
+
+    pub fn clear(&mut self) {
+        self.definition = Definition::new("", None);
+        self.sequence.clear();
     }
 }
