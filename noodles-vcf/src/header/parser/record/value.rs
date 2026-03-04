@@ -222,17 +222,24 @@ pub(super) fn parse_value(
 fn validate_format_definition(
     file_format: FileFormat,
     id: &str,
-    actual_number: crate::header::record::value::map::format::Number,
+    _actual_number: crate::header::record::value::map::format::Number,
     actual_type: crate::header::record::value::map::format::Type,
 ) -> Result<(), ParseError> {
     use crate::header::record::value::map::format::definition::definition;
 
-    if let Some((expected_number, expected_type, _)) = definition(file_format, id) {
-        if actual_number != expected_number || actual_type != expected_type {
+    // Only validate Type, not Number. Many real-world VCF files (e.g. from
+    // older GATK) declare well-known fields like AD with Number=. instead of
+    // Number=R.  The header's Number declaration is authoritative and should
+    // be accepted as-is, matching bcftools behaviour.
+    if let Some((_, expected_type, _)) = definition(file_format, id) {
+        if actual_type != expected_type {
             return Err(ParseError::FormatDefinitionMismatch {
                 id: id.into(),
-                actual: (actual_number, actual_type),
-                expected: (expected_number, expected_type),
+                actual: (_actual_number, actual_type),
+                expected: (
+                    _actual_number, // report actual Number so the message stays informative
+                    expected_type,
+                ),
             });
         }
     }
@@ -243,17 +250,21 @@ fn validate_format_definition(
 fn validate_info_definition(
     file_format: FileFormat,
     id: &str,
-    actual_number: crate::header::record::value::map::info::Number,
+    _actual_number: crate::header::record::value::map::info::Number,
     actual_type: crate::header::record::value::map::info::Type,
 ) -> Result<(), ParseError> {
     use crate::header::record::value::map::info::definition::definition;
 
-    if let Some((expected_number, expected_type, _)) = definition(file_format, id) {
-        if actual_number != expected_number || actual_type != expected_type {
+    // Only validate Type, not Number — same rationale as validate_format_definition.
+    if let Some((_, expected_type, _)) = definition(file_format, id) {
+        if actual_type != expected_type {
             return Err(ParseError::InfoDefinitionMismatch {
                 id: id.into(),
-                actual: (actual_number, actual_type),
-                expected: (expected_number, expected_type),
+                actual: (_actual_number, actual_type),
+                expected: (
+                    _actual_number,
+                    expected_type,
+                ),
             });
         }
     }
