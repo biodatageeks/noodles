@@ -139,6 +139,24 @@ mod tests {
     }
 
     #[test]
+    fn test_read_index_with_multiple_records() -> Result<(), Box<dyn std::error::Error>> {
+        let data = b"0\t10946\t6765\t17711\t233\t317811\n1\t17\t21\t34\t55\t89\n";
+
+        let mut reader = &data[..];
+        let mut buf = String::new();
+        let actual = read_index(&mut reader, &mut buf)?;
+
+        let expected = vec![
+            Record::new(Some(0), Position::new(10946), 6765, 17711, 233, 317811),
+            Record::new(Some(1), Position::new(17), 21, 34, 55, 89),
+        ];
+
+        assert_eq!(actual, expected);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_read_line() -> io::Result<()> {
         fn t(buf: &mut String, mut src: &[u8], expected: &str) -> io::Result<()> {
             buf.clear();

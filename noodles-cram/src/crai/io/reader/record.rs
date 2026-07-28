@@ -16,6 +16,8 @@ pub(super) fn read_record<R>(
 where
     R: BufRead,
 {
+    buf.clear();
+
     match read_line(reader, buf)? {
         0 => Ok(0),
         n => {

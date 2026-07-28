@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+  * cram/crai/io/reader/record: Clear the line buffer between records.
+
+    `read_index` passes a single buffer to `read_record`, which appends to it
+    rather than replacing its contents. Each line was concatenated onto the
+    previous one, causing an index with more than one record to fail to parse.
+
 ## 0.96.0 - 2026-07-24
 
 ### Changed

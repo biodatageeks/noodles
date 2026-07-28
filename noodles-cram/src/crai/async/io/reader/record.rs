@@ -11,6 +11,8 @@ pub(super) async fn read_record<R>(
 where
     R: AsyncBufRead + Unpin,
 {
+    buf.clear();
+
     match read_line(reader, buf).await? {
         0 => Ok(0),
         n => {
