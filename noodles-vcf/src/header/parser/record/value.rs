@@ -227,8 +227,11 @@ fn validate_format_definition(
 ) -> Result<(), ParseError> {
     use crate::header::record::value::map::format::definition::definition;
 
+    // Only Type is validated. Real-world files (e.g. older GATK) declare well-known fields such as
+    // AD with Number=. instead of Number=R; the header's declaration is taken as authoritative,
+    // matching bcftools.
     if let Some((expected_number, expected_type, _)) = definition(file_format, id)
-        && (actual_number != expected_number || actual_type != expected_type)
+        && actual_type != expected_type
     {
         return Err(ParseError::FormatDefinitionMismatch {
             id: id.into(),
@@ -248,8 +251,9 @@ fn validate_info_definition(
 ) -> Result<(), ParseError> {
     use crate::header::record::value::map::info::definition::definition;
 
+    // Only Type is validated — same rationale as validate_format_definition.
     if let Some((expected_number, expected_type, _)) = definition(file_format, id)
-        && (actual_number != expected_number || actual_type != expected_type)
+        && actual_type != expected_type
     {
         return Err(ParseError::InfoDefinitionMismatch {
             id: id.into(),
