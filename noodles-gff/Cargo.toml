@@ -1,6 +1,6 @@
 [package]
 name = "noodles-gff"
-version = "0.51.0"
+version = "0.59.0"
 authors = ["Michael Macias <zaeleus@gmail.com>"]
 license.workspace = true
 edition.workspace = true
@@ -20,9 +20,9 @@ indexmap.workspace = true
 lexical-core.workspace = true
 log.workspace = true
 memchr.workspace = true
-noodles-bgzf = { path = "../noodles-bgzf", version = "0.42.0" }
-noodles-core = { path = "../noodles-core", version = "0.18.0" }
-noodles-csi = { path = "../noodles-csi", version = "0.50.0" }
+noodles-bgzf = { path = "../noodles-bgzf", version = "0.49.0" }
+noodles-core = { path = "../noodles-core", version = "0.20.0" }
+noodles-csi = { path = "../noodles-csi", version = "0.58.0" }
 percent-encoding.workspace = true
 
 futures = { workspace = true, optional = true, features = ["std"] }
@@ -41,6 +41,10 @@ workspace = true
 [package.metadata.docs.rs]
 features = ["async"]
 
+[[example]]
+name = "gff_count_async"
+required-features = ["async"]
+
 [[bench]]
 name = "fast_vs_original"
 harness = false
@@ -52,11 +56,6 @@ harness = false
 [[bench]]
 name = "async_benchmark"
 harness = false
-
-
-[[example]]
-name = "gff_count_async"
-required-features = ["async"]
 
 [[example]]
 name = "async_recordbuf_test"
