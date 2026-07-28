@@ -5,8 +5,10 @@ use tokio::io::{
     self, AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncSeek, AsyncSeekExt, SeekFrom,
 };
 
+use futures::{Stream, stream};
+
 use self::{definition::read_definition, sequence::read_sequence};
-use crate::record::Definition;
+use crate::{Record, record::Definition};
 
 /// An async FASTA reader.
 pub struct Reader<R> {
@@ -127,6 +129,72 @@ where
     /// ```
     pub async fn read_sequence(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
         read_sequence(&mut self.inner, buf).await
+    }
+
+    /// Reads a single record, returning `None` at end of stream.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::io;
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() -> io::Result<()> {
+    /// use noodles_fasta as fasta;
+    ///
+    /// let data = b">sq0\nACGT\n";
+    /// let mut reader = fasta::r#async::io::Reader::new(&data[..]);
+    ///
+    /// let record = reader.read_record().await?.unwrap();
+    ///
+    /// assert_eq!(record.name(), b"sq0");
+    /// assert_eq!(record.sequence().as_ref(), b"ACGT");
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn read_record(&mut self) -> io::Result<Option<Record>> {
+        let mut definition = Definition::default();
+
+        if self.read_definition(&mut definition).await? == 0 {
+            return Ok(None);
+        }
+
+        let mut sequence_buf = Vec::new();
+        self.read_sequence(&mut sequence_buf).await?;
+
+        Ok(Some(Record::new(definition, sequence_buf.into())))
+    }
+
+    /// Returns a stream over records starting from the current stream position.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::io;
+    /// #
+    /// # #[tokio::main]
+    /// # async fn main() -> io::Result<()> {
+    /// use futures::TryStreamExt;
+    /// use noodles_fasta as fasta;
+    ///
+    /// let data = b">sq0\nACGT\n>sq1\nNNNN\n";
+    /// let mut reader = fasta::r#async::io::Reader::new(&data[..]);
+    /// let mut records = reader.records();
+    ///
+    /// while let Some(record) = records.try_next().await? {
+    ///     // ...
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn records(&mut self) -> impl Stream<Item = io::Result<Record>> + '_ {
+        Box::pin(stream::unfold(self, |reader| async {
+            match reader.read_record().await {
+                Ok(None) => None,
+                Ok(Some(record)) => Some((Ok(record), reader)),
+                Err(e) => Some((Err(e), reader)),
+            }
+        }))
     }
 }
 
